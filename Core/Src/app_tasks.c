@@ -4,8 +4,14 @@
 
 osThreadId_t statusLedTaskHandle;
 osThreadId_t uartTaskHandle;
+osThreadId_t sensorTaskHandle;
 
 static UART_HandleTypeDef *g_huart = NULL;
+
+static void send_text(const char *msg)
+{
+    HAL_UART_Transmit(g_huart, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
+}
 
 void StatusLedTask(void *argument)
 {
@@ -26,8 +32,28 @@ void UartTask(void *argument)
 
     for (;;)
     {
-        HAL_UART_Transmit(g_huart, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
-        osDelay(1000);
+        send_text(msg);
+        osDelay(2000);
+    }
+}
+
+void SensorTask(void *argument)
+{
+    (void)argument;
+
+    uint8_t prev = 0;
+
+    for (;;)
+    {
+        uint8_t now = (HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_13) == GPIO_PIN_RESET) ? 1U : 0U;
+
+        if (now && !prev)
+        {
+            send_text("[SensorTask] Button press detected\r\n");
+        }
+
+        prev = now;
+        osDelay(30);
     }
 }
 
@@ -47,6 +73,13 @@ void AppTasks_Init(UART_HandleTypeDef *huart)
         .stack_size = 512
     };
 
+    const osThreadAttr_t sensorTaskAttr = {
+        .name = "SensorTask",
+        .priority = osPriorityHigh,
+        .stack_size = 256
+    };
+
     statusLedTaskHandle = osThreadNew(StatusLedTask, NULL, &statusLedTaskAttr);
     uartTaskHandle = osThreadNew(UartTask, NULL, &uartTaskAttr);
+    sensorTaskHandle = osThreadNew(SensorTask, NULL, &sensorTaskAttr);
 }
