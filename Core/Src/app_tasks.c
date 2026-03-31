@@ -5,12 +5,25 @@
 osThreadId_t statusLedTaskHandle;
 osThreadId_t uartTaskHandle;
 osThreadId_t sensorTaskHandle;
+osThreadId_t motorTaskHandle;
 
 static UART_HandleTypeDef *g_huart = NULL;
+static TIM_HandleTypeDef *g_htim_pwm = NULL;
 
 static void send_text(const char *msg)
 {
     HAL_UART_Transmit(g_huart, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
+}
+
+void Servo_SetAngle(uint8_t angle)
+{
+    if (angle > 180)
+    {
+        angle = 180;
+    }
+
+    uint32_t pulse_us = 500 + ((uint32_t)angle * 2000U) / 180U;
+    __HAL_TIM_SET_COMPARE(g_htim_pwm, TIM_CHANNEL_1, pulse_us);
 }
 
 void StatusLedTask(void *argument)
@@ -28,11 +41,9 @@ void UartTask(void *argument)
 {
     (void)argument;
 
-    const char *msg = "[UartTask] System alive\r\n";
-
     for (;;)
     {
-        send_text(msg);
+        send_text("[UartTask] System alive\r\n");
         osDelay(2000);
     }
 }
@@ -57,9 +68,26 @@ void SensorTask(void *argument)
     }
 }
 
-void AppTasks_Init(UART_HandleTypeDef *huart)
+void MotorTask(void *argument)
+{
+    (void)argument;
+
+    for (;;)
+    {
+        Servo_SetAngle(90);
+        send_text("[MotorTask] Servo open\r\n");
+        osDelay(1000);
+
+        Servo_SetAngle(0);
+        send_text("[MotorTask] Servo close\r\n");
+        osDelay(1000);
+    }
+}
+
+void AppTasks_Init(UART_HandleTypeDef *huart, TIM_HandleTypeDef *htim_pwm)
 {
     g_huart = huart;
+    g_htim_pwm = htim_pwm;
 
     const osThreadAttr_t statusLedTaskAttr = {
         .name = "StatusLedTask",
@@ -79,7 +107,14 @@ void AppTasks_Init(UART_HandleTypeDef *huart)
         .stack_size = 256
     };
 
+    const osThreadAttr_t motorTaskAttr = {
+        .name = "MotorTask",
+        .priority = osPriorityHigh,
+        .stack_size = 256
+    };
+
     statusLedTaskHandle = osThreadNew(StatusLedTask, NULL, &statusLedTaskAttr);
     uartTaskHandle = osThreadNew(UartTask, NULL, &uartTaskAttr);
     sensorTaskHandle = osThreadNew(SensorTask, NULL, &sensorTaskAttr);
+    motorTaskHandle = osThreadNew(MotorTask, NULL, &motorTaskAttr);
 }
