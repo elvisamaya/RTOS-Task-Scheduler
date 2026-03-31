@@ -6,9 +6,11 @@
 
 extern osThreadId_t statusLedTaskHandle;
 extern osThreadId_t uartTaskHandle;
+extern osThreadId_t sensorTaskHandle;
 
 void AppTasks_Init(UART_HandleTypeDef *huart);
 void StatusLedTask(void *argument);
 void UartTask(void *argument);
+void SensorTask(void *argument);
 
 #endif /* APP_TASKS_H */
