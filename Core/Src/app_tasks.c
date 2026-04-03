@@ -7,6 +7,8 @@ osThreadId_t uartTaskHandle;
 osThreadId_t sensorTaskHandle;
 osThreadId_t motorTaskHandle;
 
+osMessageQueueId_t sensorQueueHandle;
+
 static UART_HandleTypeDef *g_huart = NULL;
 static TIM_HandleTypeDef *g_htim_pwm = NULL;
 
@@ -60,7 +62,9 @@ void SensorTask(void *argument)
 
         if (now && !prev)
         {
-            send_text("[SensorTask] Button press detected\r\n");
+            SensorEvent_t evt = { .triggered = 1 };
+            osMessageQueuePut(sensorQueueHandle, &evt, 0, 0);
+            send_text("[SensorTask] Button press queued\r\n");
         }
 
         prev = now;
@@ -72,15 +76,23 @@ void MotorTask(void *argument)
 {
     (void)argument;
 
+    SensorEvent_t evt;
+
+    Servo_SetAngle(0);
+
     for (;;)
     {
-        Servo_SetAngle(90);
-        send_text("[MotorTask] Servo open\r\n");
-        osDelay(1000);
-
-        Servo_SetAngle(0);
-        send_text("[MotorTask] Servo close\r\n");
-        osDelay(1000);
+        if (osMessageQueueGet(sensorQueueHandle, &evt, NULL, osWaitForever) == osOK)
+        {
+            if (evt.triggered)
+            {
+                send_text("[MotorTask] Event received\r\n");
+                Servo_SetAngle(90);
+                osDelay(700);
+                Servo_SetAngle(0);
+                send_text("[MotorTask] Motion complete\r\n");
+            }
+        }
     }
 }
 
@@ -88,6 +100,8 @@ void AppTasks_Init(UART_HandleTypeDef *huart, TIM_HandleTypeDef *htim_pwm)
 {
     g_huart = huart;
     g_htim_pwm = htim_pwm;
+
+    sensorQueueHandle = osMessageQueueNew(8, sizeof(SensorEvent_t), NULL);
 
     const osThreadAttr_t statusLedTaskAttr = {
         .name = "StatusLedTask",
