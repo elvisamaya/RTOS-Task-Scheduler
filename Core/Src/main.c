@@ -14,6 +14,7 @@ int main(void)
 {
     HAL_Init();
     SystemClock_Config();
+
     MX_GPIO_Init();
     MX_USART2_UART_Init();
     MX_TIM3_Init();
@@ -21,7 +22,15 @@ int main(void)
     HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
 
     osKernelInitialize();
-    AppTasks_Init(&huart2, &htim3);
+
+    AppContext_t app = {
+        .huart = &huart2,
+        .htim_pwm = &htim3,
+        .pwm_channel = TIM_CHANNEL_1
+    };
+
+    AppTasks_Init(&app);
+
     osKernelStart();
 
     while (1)
@@ -31,15 +40,15 @@ int main(void)
 
 static void SystemClock_Config(void)
 {
-    /* placeholder clock config for early bring-up */
+    /* this would normally come from CubeMX-generated code */
 }
 
 static void MX_GPIO_Init(void)
 {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOC_CLK_ENABLE();
-
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
 
@@ -86,9 +95,9 @@ static void MX_USART2_UART_Init(void)
 
 static void MX_TIM3_Init(void)
 {
-    __HAL_RCC_TIM3_CLK_ENABLE();
-
     TIM_OC_InitTypeDef sConfigOC = {0};
+
+    __HAL_RCC_TIM3_CLK_ENABLE();
 
     htim3.Instance = TIM3;
     htim3.Init.Prescaler = 84 - 1;
@@ -118,5 +127,7 @@ void Error_Handler(void)
     __disable_irq();
     while (1)
     {
+        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+        for (volatile uint32_t i = 0; i < 200000; i++);
     }
 }
